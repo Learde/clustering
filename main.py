@@ -9,7 +9,7 @@ def genDataClouds(points, n):
     for i in range(0, n):
         if random.random() < 0.5:
             points[i].clust = 0
-            points[i].x = random.normalvariate(-0.25, 0.75)
+            points[i].x = random.normalvariate(0.25, 1.25)
             points[i].y = random.normalvariate(0.0, 0.2)
         else:
             points[i].clust = 1
@@ -46,11 +46,16 @@ class CLUSTER(POINT):
         self.x /= self.n
         self.y /= self.n
 
-
 CLUSTERS = [CLUSTER(0, -2.0, 0.5), CLUSTER(1, 2.0, 0.5)]
 POINTS = [POINT(CLUST_N, 0.0, 0.0) for i in range(0, POINT_N)]
-
 genDataClouds(POINTS, POINT_N)
+
+for point in POINTS:
+    if (point.clust == 0):
+        plt.scatter(point.x, point.y, c='lightblue', s=20)
+    elif (point.clust == 1):
+        plt.scatter(point.x, point.y, c='pink', s=20)
+plt.show()
 
 Q = 0.5
 PROBABILITIES = [[0 for i in range(0, POINT_N)] for i in range(0, CLUST_N)]
@@ -58,7 +63,7 @@ PROBABILITIES = [[0 for i in range(0, POINT_N)] for i in range(0, CLUST_N)]
 for n in range(0,3):
     for cn in range(0, CLUST_N):
         for pn in range(0, POINT_N):
-            PROBABILITIES[cn][pn] = CLUSTERS[cn].dist(POINTS[pn]) ** Q
+            PROBABILITIES[cn][pn] = CLUSTERS[cn].dist(POINTS[pn]) ** 1/Q
 
     for pn in range(0, POINT_N):
         sumProbabilities = 0
