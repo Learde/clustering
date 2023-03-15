@@ -9,12 +9,12 @@ def genDataClouds(points, n):
     for i in range(0, n):
         if random.random() < 0.5:
             points[i].clust = 0
-            points[i].x = random.normalvariate(-1.0, 0.5)
+            points[i].x = random.normalvariate(-0.25, 0.75)
             points[i].y = random.normalvariate(0.0, 0.2)
         else:
             points[i].clust = 1
-            points[i].x = random.normalvariate(1.0, 0.2)
-            points[i].y = random.normalvariate(0.0, 0.75)
+            points[i].x = random.normalvariate(0.25, 0.75)
+            points[i].y = random.normalvariate(0.0, 0.8)
     return
 
 
@@ -30,6 +30,7 @@ class CLUSTER(POINT):
         POINT.__init__(self, clust, x, y)
         self.n = 0
 
+    # distance from center to point
     def dist(self, p):
         return (self.x - p.x) ** 2 + (self.y - p.y) ** 2
 
@@ -51,18 +52,31 @@ POINTS = [POINT(CLUST_N, 0.0, 0.0) for i in range(0, POINT_N)]
 
 genDataClouds(POINTS, POINT_N)
 
-# for p in POINTS:
-#     plt.scatter(p.x, p.y, c='black', s=20)
-# plt.show()
+Q = 0.5
+PROBABILITIES = [[0 for i in range(0, POINT_N)] for i in range(0, CLUST_N)]
 
 for n in range(0,3):
-    for point in POINTS:
-        if CLUSTERS[0].dist(point) < CLUSTERS[1].dist(point):
+    for cn in range(0, CLUST_N):
+        for pn in range(0, POINT_N):
+            PROBABILITIES[cn][pn] = CLUSTERS[cn].dist(POINTS[pn]) ** Q
+
+    for pn in range(0, POINT_N):
+        sumProbabilities = 0
+        for cn in range(0, CLUST_N):
+            sumProbabilities += PROBABILITIES[cn][pn]
+        A = 1 / sumProbabilities
+        for cn in range(0, CLUST_N):
+            PROBABILITIES[cn][pn] = A / PROBABILITIES[cn][pn]
+
+    for pn in range(0, POINT_N):
+        point = POINTS[pn]
+        if PROBABILITIES[0][pn] > PROBABILITIES[1][pn]:
             point.clust = 0
             plt.scatter(point.x, point.y, c='lightblue', s=20)
         else:
             point.clust = 1
             plt.scatter(point.x, point.y, c='pink', s=20)
+
     for c in CLUSTERS:
         plt.scatter(c.x, c.y, c='#800000', marker='X', s=30)
     plt.show()
