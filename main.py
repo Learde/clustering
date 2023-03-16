@@ -17,15 +17,6 @@ def genDataClouds(points, n):
             points[i].y = random.normalvariate(0.0, 0.8)
     return
 
-
-def printMatrix(matrix):
-    s = [[str(e) for e in row] for row in matrix]
-    lens = [max(map(len, col)) for col in zip(*s)]
-    fmt = '\t'.join('{{:{}}}'.format(x) for x in lens)
-    table = [fmt.format(*row) for row in s]
-    print('\n'.join(table))
-    return
-
 class POINT:
     def __init__(self, clust, x, y):
         self.clust = clust
@@ -81,8 +72,6 @@ for n in range(0,3):
         A = 1 / sumProbabilities
         for cn in range(0, CLUST_N):
             PROBABILITIES[cn][pn] *= A
-
-    print(PROBABILITIES[0][30], PROBABILITIES[1][30], PROBABILITIES[0][30] + PROBABILITIES[1][30])
 
     for pn in range(0, POINT_N):
         point = POINTS[pn]
