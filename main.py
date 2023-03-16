@@ -9,14 +9,22 @@ def genDataClouds(points, n):
     for i in range(0, n):
         if random.random() < 0.5:
             points[i].clust = 0
-            points[i].x = random.normalvariate(0.25, 1.25)
+            points[i].x = random.normalvariate(-0.25, 0.75)
             points[i].y = random.normalvariate(0.0, 0.2)
         else:
             points[i].clust = 1
-            points[i].x = random.normalvariate(0.25, 0.75)
+            points[i].x = random.normalvariate(-0.25, 0.75)
             points[i].y = random.normalvariate(0.0, 0.8)
     return
 
+
+def printMatrix(matrix):
+    s = [[str(e) for e in row] for row in matrix]
+    lens = [max(map(len, col)) for col in zip(*s)]
+    fmt = '\t'.join('{{:{}}}'.format(x) for x in lens)
+    table = [fmt.format(*row) for row in s]
+    print('\n'.join(table))
+    return
 
 class POINT:
     def __init__(self, clust, x, y):
@@ -46,24 +54,25 @@ class CLUSTER(POINT):
         self.x /= self.n
         self.y /= self.n
 
+
 CLUSTERS = [CLUSTER(0, -2.0, 0.5), CLUSTER(1, 2.0, 0.5)]
 POINTS = [POINT(CLUST_N, 0.0, 0.0) for i in range(0, POINT_N)]
 genDataClouds(POINTS, POINT_N)
 
 for point in POINTS:
-    if (point.clust == 0):
+    if point.clust == 0:
         plt.scatter(point.x, point.y, c='lightblue', s=20)
-    elif (point.clust == 1):
+    elif point.clust == 1:
         plt.scatter(point.x, point.y, c='pink', s=20)
 plt.show()
 
-Q = 0.5
+Q = 0.75
 PROBABILITIES = [[0 for i in range(0, POINT_N)] for i in range(0, CLUST_N)]
 
 for n in range(0,3):
     for cn in range(0, CLUST_N):
         for pn in range(0, POINT_N):
-            PROBABILITIES[cn][pn] = CLUSTERS[cn].dist(POINTS[pn]) ** 1/Q
+            PROBABILITIES[cn][pn] = 1 / (CLUSTERS[cn].dist(POINTS[pn]) ** (1/Q))
 
     for pn in range(0, POINT_N):
         sumProbabilities = 0
@@ -71,11 +80,13 @@ for n in range(0,3):
             sumProbabilities += PROBABILITIES[cn][pn]
         A = 1 / sumProbabilities
         for cn in range(0, CLUST_N):
-            PROBABILITIES[cn][pn] = A / PROBABILITIES[cn][pn]
+            PROBABILITIES[cn][pn] *= A
+
+    print(PROBABILITIES[0][30], PROBABILITIES[1][30], PROBABILITIES[0][30] + PROBABILITIES[1][30])
 
     for pn in range(0, POINT_N):
         point = POINTS[pn]
-        if PROBABILITIES[0][pn] > PROBABILITIES[1][pn]:
+        if random.random() < PROBABILITIES[0][pn]:
             point.clust = 0
             plt.scatter(point.x, point.y, c='lightblue', s=20)
         else:
