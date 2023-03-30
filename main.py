@@ -1,152 +1,106 @@
 import matplotlib.pyplot as plt
-import random
-import math
+import pandas as pd
+
+CLUST_N = 2
+DIM_N = 6
+POINT_N = 201
 
 
 class Point:
-    def __init__(self, x, y):
+    # x = x1 x2 .. xn
+    def __init__(self, x):
         self.x = x
-        self.y = y
-        self.visited = False
-        self.cluster = None
+        self.clust = CLUST_N
+
+    def to_clust(self, CC):
+        n = CLUST_N
+        d = 2**31
+        for c in CC:
+            if c.dist(self) < d:
+                n = c.clust
+                d = c.dist(self)
+        self.clust = n
 
 
-class Cluster:
-    def __init__(self):
-        self.points = []
+class Cluster(Point):
+    def __init__(self, cl, x):
+        Point.__init__(self, x)
+        self.clust = cl
+        self.N = 0
+
+    def dist(self, p):
+        dd = 0.0
+        for i in range(DIM_N):
+            dd += (self.x[i] - p.x[i])**2
+        return dd
+
+    def eval(self, p_set):
+        self.N = 0
+        for i in range(DIM_N):
+            self.x[i] = 0.0
+        for p in p_set:
+            if p.clust == self.clust:
+                self.N += 1
+                for i in range(DIM_N):
+                    self.x[i] += p.x[i]
+        for i in range(DIM_N):
+            self.x[i] /= self.N
 
 
-class DENSITY:
-    def __init__(self, eps):
-        self.eps = eps
-        self.min_pts = 1
+bills = pd.read_csv("fake_bills.csv")
+cat_columns = bills.select_dtypes(['object']).columns
+bills[cat_columns] = bills[cat_columns].apply(lambda x: pd.factorize(x)[0])
 
-    def _eps_neighborhood(self, point_p, point_q):
-        return (point_p.x - point_q.x) ** 2 + (point_p.y - point_q.y) ** 2 <= self.eps ** 2
+points_set = [Point([bills["diagonal"][i], bills["height_left"][i], bills["height_right"][i], bills["margin_low"][i], bills["margin_up"][i], bills["length"]]) for i in range(len(bills))]
+'''
+cluster_set = [Cluster(0, [23, 0, 0, 0, 25.355]), Cluster(1, [47, 1, 1, 0, 13.093]), Cluster(2, [28, 0, 2, 0, 7.798]),
+               Cluster(3, [43, 1, 0, 0, 13.972]), Cluster(4, [74, 1, 0, 0, 9.567])]
+'''
+cluster_set = [Cluster(0, [171.93,104.15,103.98,4.57,3.57,112.71]), Cluster(1, [172.2,104.35,103.67,4.44,3.38,113.65])]
+colors = ['#0000FF', '#FF0000']
 
-    def _region_query(self, point, points):
-        neighbors = []
-        for point_q in points:
-            if self._eps_neighborhood(point, point_q):
-                neighbors.append(point_q)
-        return neighbors
-
-    def _expand_cluster(self, point, neighbors, cluster, points):
-        cluster.points.append(point)
-        point.cluster = cluster
-        for point_q in neighbors:
-            if not point_q.visited:
-                point_q.visited = True
-                neighbors_q = self._region_query(point_q, points)
-                if len(neighbors_q) >= self.min_pts:
-                    neighbors += neighbors_q
-            if not point_q.cluster:
-                cluster.points.append(point_q)
-                point_q.cluster = cluster
-
-    def fit(self, points):
-        clusters = []
-        for point in points:
-            if point.visited:
-                continue
-            point.visited = True
-            neighbors = self._region_query(point, points)
-            if len(neighbors) < self.min_pts:
-                point.cluster = None
-            else:
-                cluster = Cluster()
-                clusters.append(cluster)
-                self._expand_cluster(point, neighbors, cluster, points)
-        return clusters
+print(bills.head(40))
 
 
-def gen_data_clouds(points, count_points):
-    for i in range(0, count_points):
-        if random.random() < 0.5:
-            points[i].x = random.normalvariate(-1.0, 0.4)
-            points[i].y = random.normalvariate(-1.0, 0.3)
-        else:
-            points[i].x = random.normalvariate(1.0, 0.3)
-            points[i].y = random.normalvariate(0.5, 0.4)
-    return
+Prec0 = 0.0
+
+while True:
+
+    for p in points_set:
+        p.to_clust(cluster_set)
+    for cl in cluster_set:
+        cl.eval(points_set)
+
+    fig, axes = plt.subplots(3, 5, figsize=(14, 8))
+    n = 0
+    for i in range(DIM_N):
+        for j in range(i+1, DIM_N):
+            ix = int(n/6)
+            iy = int(n % 6)
+            for k in range(POINT_N):
+                axes[ix][iy].scatter(points_set[k].x[i], points_set[k].x[j], c = colors[bills["is_genuine"][k]], s = 20)
+            for c in cluster_set:
+                axes[ix][iy].scatter(c.x[i], c.x[j], c = 'red', s = 60, marker='*')
+
+            axes[ix][iy].set_xlabel("$Axis: (" + str(i) + ", " + str(j) + ')$', fontsize = 12)
+            axes[ix][iy].set_xticks([])
+            axes[ix][iy].set_yticks([])
+            n += 1
+    fig.tight_layout()
+    plt.show()
+
+    n = 0
+    for i in range(len(bills)):
+        if points_set[i].clust == bills["is_genuine"][i]:
+            n += 1
+    Prec = float(n)/len(bills)
+    print('=====>', Prec)
+    if abs(Prec - Prec0) < 0.001:
+        break
+    Prec0 = Prec
 
 
-def gen_data_cloud(points, count_points):
-    for i in range(0, count_points):
-        if random.random() < 0.5:
-            points[i].x = random.normalvariate(-0.3, 0.5)
-            points[i].y = random.normalvariate(-0.5, 0.5)
-        else:
-            points[i].x = random.normalvariate(0.3, 0.5)
-            points[i].y = random.normalvariate(0.5, 0.5)
-    return
 
 
-def gen_data_moons(points, count_points):
-    for i in range(0, count_points):
-        deg = 3.14 * random.random()
-        r = 0.2 * random.normalvariate(0.0, 0.4) + 1.5
-        if random.random() < 0.5:
-            points[i].x = 0.5 + r * math.cos(deg)
-            points[i].y = -0.25 + r * math.sin(deg)
-        else:
-            points[i].x = -0.5 + r * math.cos(deg)
-            points[i].y = 0.25 - r * math.sin(deg)
-    return
 
 
-def gen_data_circle(points, count_points):
-    for i in range(0, count_points):
-        deg = 3.14 * random.random()
-        r = 0.2 * random.normalvariate(0.0, 0.4) + 0.9
-        if random.random() < 0.5:
-            points[i].x = 0.5 + r * math.cos(deg)
-            points[i].y = 0.25 + r * math.sin(deg)
-        else:
-            points[i].x = 0.5 + r * math.cos(deg)
-            points[i].y = 0.25 - r * math.sin(deg)
-    return
-
-
-def draw_clusters(clusters, plotName, axis):
-    COLORS = ['green', 'blue', 'red', 'yellow', 'violet', 'aqua', 'plum', 'wheat']
-    for i, cluster in enumerate(clusters):
-        for point in cluster.points:
-            color = 'black'
-            if len(COLORS) > i:
-                color = COLORS[i]
-            axis.scatter(point.x, point.y, c=color, marker='.')
-    axis.set_xlabel(plotName)
-
-
-POINTS_COUNT = 200
-
-POINTS1 = [Point(0.0, 0.0) for _ in range(0, POINTS_COUNT)]
-POINTS2 = [Point(0.0, 0.0) for _ in range(0, POINTS_COUNT)]
-POINTS3 = [Point(0.0, 0.0) for _ in range(0, POINTS_COUNT)]
-POINTS4 = [Point(0.0, 0.0) for _ in range(0, POINTS_COUNT)]
-density1 = DENSITY(eps=1.5)
-density2 = DENSITY(eps=0.5)
-density3 = DENSITY(eps=0.25)
-density4 = DENSITY(eps=0.25)
-
-f = plt.figure()
-f, axes = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True)
-
-gen_data_cloud(POINTS1, POINTS_COUNT)
-CLUSTERS1 = density1.fit(POINTS1)
-draw_clusters(CLUSTERS1, "One Cloud", axes[0][0])
-
-gen_data_clouds(POINTS2, POINTS_COUNT)
-CLUSTERS2 = density2.fit(POINTS2)
-draw_clusters(CLUSTERS2, "Two Clouds", axes[0][1])
-
-gen_data_moons(POINTS3, POINTS_COUNT)
-CLUSTERS3 = density3.fit(POINTS3)
-draw_clusters(CLUSTERS3, "Moons", axes[1][0])
-
-gen_data_circle(POINTS4, POINTS_COUNT)
-CLUSTERS4 = density4.fit(POINTS4)
-draw_clusters(CLUSTERS4, "Circle", axes[1][1])
-
-plt.show()
