@@ -48,16 +48,16 @@ class Cluster(Point):
 
 
 bills = pd.read_csv("fake_bills.csv")
-cat_columns = bills.select_dtypes(['object']).columns
+cat_columns = bills.select_dtypes(['bool']).columns
 bills[cat_columns] = bills[cat_columns].apply(lambda x: pd.factorize(x)[0])
 
-points_set = [Point([bills["diagonal"][i], bills["height_left"][i], bills["height_right"][i], bills["margin_low"][i], bills["margin_up"][i], bills["length"]]) for i in range(len(bills))]
+points_set = [Point([bills["diagonal"][i], bills["height_left"][i], bills["height_right"][i], bills["margin_low"][i], bills["margin_up"][i], bills["length"][i]]) for i in range(len(bills))]
 '''
 cluster_set = [Cluster(0, [23, 0, 0, 0, 25.355]), Cluster(1, [47, 1, 1, 0, 13.093]), Cluster(2, [28, 0, 2, 0, 7.798]),
                Cluster(3, [43, 1, 0, 0, 13.972]), Cluster(4, [74, 1, 0, 0, 9.567])]
 '''
-cluster_set = [Cluster(0, [171.93,104.15,103.98,4.57,3.57,112.71]), Cluster(1, [172.2,104.35,103.67,4.44,3.38,113.65])]
-colors = ['#0000FF', '#FF0000']
+cluster_set = [Cluster(1, [171.93,104.15,103.98,4.57,3.57,112.71]), Cluster(0, [172.2,104.35,103.67,4.44,3.38,113.65])]
+colors = ['#0000FF', '#00FF00']
 
 print(bills.head(40))
 
@@ -71,7 +71,7 @@ while True:
     for cl in cluster_set:
         cl.eval(points_set)
 
-    fig, axes = plt.subplots(3, 5, figsize=(14, 8))
+    fig, axes = plt.subplots(3, 6, figsize=(14, 8))
     n = 0
     for i in range(DIM_N):
         for j in range(i+1, DIM_N):
@@ -91,6 +91,7 @@ while True:
 
     n = 0
     for i in range(len(bills)):
+        print(points_set[i].clust, bills["is_genuine"][i])
         if points_set[i].clust == bills["is_genuine"][i]:
             n += 1
     Prec = float(n)/len(bills)
