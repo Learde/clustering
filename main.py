@@ -1,107 +1,65 @@
-import matplotlib.pyplot as plt
 import pandas as pd
-
-CLUST_N = 2
-DIM_N = 6
-POINT_N = 201
-
-
-class Point:
-    # x = x1 x2 .. xn
-    def __init__(self, x):
-        self.x = x
-        self.clust = CLUST_N
-
-    def to_clust(self, CC):
-        n = CLUST_N
-        d = 2**31
-        for c in CC:
-            if c.dist(self) < d:
-                n = c.clust
-                d = c.dist(self)
-        self.clust = n
-
-
-class Cluster(Point):
-    def __init__(self, cl, x):
-        Point.__init__(self, x)
-        self.clust = cl
-        self.N = 0
-
-    def dist(self, p):
-        dd = 0.0
-        for i in range(DIM_N):
-            dd += (self.x[i] - p.x[i])**2
-        return dd
-
-    def eval(self, p_set):
-        self.N = 0
-        for i in range(DIM_N):
-            self.x[i] = 0.0
-        for p in p_set:
-            if p.clust == self.clust:
-                self.N += 1
-                for i in range(DIM_N):
-                    self.x[i] += p.x[i]
-        for i in range(DIM_N):
-            self.x[i] /= self.N
-
+import matplotlib.pyplot as plt
 
 bills = pd.read_csv("fake_bills.csv")
 cat_columns = bills.select_dtypes(['bool']).columns
 bills[cat_columns] = bills[cat_columns].apply(lambda x: pd.factorize(x)[0])
 
-points_set = [Point([bills["diagonal"][i], bills["height_left"][i], bills["height_right"][i], bills["margin_low"][i], bills["margin_up"][i], bills["length"][i]]) for i in range(len(bills))]
-'''
-cluster_set = [Cluster(0, [23, 0, 0, 0, 25.355]), Cluster(1, [47, 1, 1, 0, 13.093]), Cluster(2, [28, 0, 2, 0, 7.798]),
-               Cluster(3, [43, 1, 0, 0, 13.972]), Cluster(4, [74, 1, 0, 0, 9.567])]
-'''
-cluster_set = [Cluster(1, [171.93,104.15,103.98,4.57,3.57,112.71]), Cluster(0, [172.2,104.35,103.67,4.44,3.38,113.65])]
-colors = ['#0000FF', '#00FF00']
+print(bills.info())
+print(bills.isnull().sum())
 
-print(bills.head(40))
+is_genuine = bills['is_genuine'].values
 
+for i in range(0, len(bills)):
+    plt.scatter(bills['height_left'][i], bills['height_right'][i], color = (1.0-is_genuine[i], 0.0, is_genuine[i]), s=20)
+plt.show()
 
-Prec0 = 0.0
+KNBR_N = 5
 
-while True:
+class POINT:
+    def __init__(self, x, y, diagonal, length):
+        self.x = x
+        self.y = y
+        self.diagonal = diagonal
+        self.length = length
+        self.kn = [0 for i in range(0, KNBR_N)]
+        self.clust = 0
 
-    for p in points_set:
-        p.to_clust(cluster_set)
-    for cl in cluster_set:
-        cl.eval(points_set)
+    def neighbors(self, A):
+        l = [i for i in range(0, len(A))]
+        cl = [0,0]
+        for k in range(0, KNBR_N):
+            i0 = 0
+            d0 = 1.0e+99
+            cl[A['is_genuine'][i0]] += 1
+            for i in l:
+                d = (self.x - A['height_left'][i])**2 + (self.y - A['height_right'][i])**2 # 69%
+                d += (self.diagonal - A['diagonal'][i])**2                                 # 74%
+                d += (self.length - A['length'][i])**2                                     # 96%
 
-    fig, axes = plt.subplots(3, 6, figsize=(14, 8))
-    n = 0
-    for i in range(DIM_N):
-        for j in range(i+1, DIM_N):
-            ix = int(n/6)
-            iy = int(n % 6)
-            for k in range(POINT_N):
-                axes[ix][iy].scatter(points_set[k].x[i], points_set[k].x[j], c = colors[bills["is_genuine"][k]], s = 20)
-            for c in cluster_set:
-                axes[ix][iy].scatter(c.x[i], c.x[j], c = 'red', s = 60, marker='*')
-
-            axes[ix][iy].set_xlabel("$Axis: (" + str(i) + ", " + str(j) + ')$', fontsize = 12)
-            axes[ix][iy].set_xticks([])
-            axes[ix][iy].set_yticks([])
-            n += 1
-    fig.tight_layout()
-    plt.show()
-
-    n = 0
-    for i in range(len(bills)):
-        print(points_set[i].clust, bills["is_genuine"][i])
-        if points_set[i].clust == bills["is_genuine"][i]:
-            n += 1
-    Prec = float(n)/len(bills)
-    print('=====>', Prec)
-    if abs(Prec - Prec0) < 0.001:
-        break
-    Prec0 = Prec
+                if d0 > d and d > 0.0:
+                    cl[A['is_genuine'][i0]] -= 1
+                    i0 = i
+                    cl[A['is_genuine'][i0]] += 1
+                    d0 = d
+            self.kn[k] = i0
+            l.remove(i0)
+        if cl[0] > cl[1]:
+            self.clust = 0
+        else:
+            self.clust = 1
 
 
+PP = [POINT(bills['height_left'][i], bills['height_right'][i], bills['diagonal'][i], bills['length'][i]) for i in range(0, len(bills))]
 
+for p in PP:
+    p.neighbors(bills)
+    plt.scatter(p.x, p.y, color=(1.0-float(p.clust), 0.0, float(p.clust)), s=20)
+plt.show()
 
+n = 0
+for i in range(0, len(bills)):
+    if PP[i].clust == bills['is_genuine'][i]:
+        n += 1
 
-
+print('=====>', float(n)/len(bills))
