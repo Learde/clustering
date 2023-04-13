@@ -1,107 +1,96 @@
-import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn import preprocessing
 
+# Read the data
+pubs = pd.read_csv('armenian_pubs.csv')
+print(pubs.info())
+print(pubs.isnull().sum())
+
+
+# select coloumns for analis
+#col_rank = ['Occupation', 'cap-shape', 'cap-surface', 'cap-color', 'bruises', 'odor', 'gill-attachment', 'gill-spacing', 'gill-size', 'gill-color']
+#mush = mush[col_rank]
+col_rank = pubs.columns
+
+# encoding data
+ordinal_encoder = preprocessing.OrdinalEncoder(dtype=int)
+pubs = pd.DataFrame(ordinal_encoder.fit_transform(pubs), columns=col_rank)
+
+print('\n', pubs)
+
+data = pubs.drop('Occupation', axis=1)
+
+#--------------------------------------------------
+# K-mode algoritm
+
+POINT_N = len(data)
+DIM_N = 16
 CLUST_N = 2
-DIM_N = 6
-POINT_N = 201
 
+class CLUST:
+    def __init__(self, x, c):
+        self.X = x
+        self.clust = c
+    def dist(self, X):
+        d = (self.X != X).sum()
+        return d
+    def eval(self, df):
+        cols = df.columns
+        self.X = []
+        for c in cols:
+            self.X.append( df[c].value_counts().idxmax() )
+#        c = cols[0]
+#        print( df[c].value_counts() )
+        return
 
-class Point:
-    # x = x1 x2 .. xn
-    def __init__(self, x):
-        self.x = x
-        self.clust = CLUST_N
+Clust = [CLUST(data.values[0], pubs['Occupation'][1])]
+i0 = 0
+d0 = 0
+for i in range(0, POINT_N):
+    d = Clust[0].dist(data.values[i])
+    if d > d0 and Clust[0].clust != pubs['Occupation'][i]:
+        d0 = d
+        i0 = i
+Clust.append(CLUST(data.values[i0], pubs['Occupation'][i0]))
+i0 = 0
+d0 = 0
 
-    def to_clust(self, CC):
-        n = CLUST_N
-        d = 2**31
-        for c in CC:
-            if c.dist(self) < d:
-                n = c.clust
-                d = c.dist(self)
-        self.clust = n
+print(Clust[0].X)
+print(Clust[0].clust)
+print(Clust[1].X)
+print(Clust[1].clust)
 
+Res = pd.DataFrame(data=[CLUST_N for i in range(0, POINT_N)], columns=['clust'])
 
-class Cluster(Point):
-    def __init__(self, cl, x):
-        Point.__init__(self, x)
-        self.clust = cl
-        self.N = 0
+for n in range(0,3):
+    for i in range(0, POINT_N):
+        if Clust[0].dist(data.values[i]) < Clust[1].dist(data.values[i]):
+            Res['clust'][i] = Clust[0].clust
+        else:
+            Res['clust'][i] = Clust[1].clust
+    for cl in Clust:
+        df = data.loc[Res['clust'] == cl.clust]
+        cl.eval(df)
+        print('\n', cl.X)
 
-    def dist(self, p):
-        dd = 0.0
-        for i in range(DIM_N):
-            dd += (self.x[i] - p.x[i])**2
-        return dd
+    r = Res['clust'] != pubs['Occupation']
+    print('\n', r.sum()/len(r))
 
-    def eval(self, p_set):
-        self.N = 0
-        for i in range(DIM_N):
-            self.x[i] = 0.0
-        for p in p_set:
-            if p.clust == self.clust:
-                self.N += 1
-                for i in range(DIM_N):
-                    self.x[i] += p.x[i]
-        for i in range(DIM_N):
-            self.x[i] /= self.N
+#--------------------------------------------------
+# Importing Libraries
+from kmodes.kmodes import KModes
+print('\n')
+print('\n')
 
+#Using K-Mode with "Cao" initialization
+km_cao = KModes(n_clusters=2, init = "Cao", n_init = 1, verbose=1)
+fitClusters_data = km_cao.fit_predict(data)
+print('\n')
+print(fitClusters_data)
 
-bills = pd.read_csv("fake_bills.csv")
-cat_columns = bills.select_dtypes(['bool']).columns
-bills[cat_columns] = bills[cat_columns].apply(lambda x: pd.factorize(x)[0])
+clusterCentroidsDf = pd.DataFrame(km_cao.cluster_centroids_)
+clusterCentroidsDf.columns = data.columns
+print(clusterCentroidsDf)
 
-points_set = [Point([bills["diagonal"][i], bills["height_left"][i], bills["height_right"][i], bills["margin_low"][i], bills["margin_up"][i], bills["length"][i]]) for i in range(len(bills))]
-'''
-cluster_set = [Cluster(0, [23, 0, 0, 0, 25.355]), Cluster(1, [47, 1, 1, 0, 13.093]), Cluster(2, [28, 0, 2, 0, 7.798]),
-               Cluster(3, [43, 1, 0, 0, 13.972]), Cluster(4, [74, 1, 0, 0, 9.567])]
-'''
-cluster_set = [Cluster(1, [171.93,104.15,103.98,4.57,3.57,112.71]), Cluster(0, [172.2,104.35,103.67,4.44,3.38,113.65])]
-colors = ['#0000FF', '#00FF00']
-
-print(bills.head(40))
-
-
-Prec0 = 0.0
-
-while True:
-
-    for p in points_set:
-        p.to_clust(cluster_set)
-    for cl in cluster_set:
-        cl.eval(points_set)
-
-    fig, axes = plt.subplots(3, 6, figsize=(14, 8))
-    n = 0
-    for i in range(DIM_N):
-        for j in range(i+1, DIM_N):
-            ix = int(n/6)
-            iy = int(n % 6)
-            for k in range(POINT_N):
-                axes[ix][iy].scatter(points_set[k].x[i], points_set[k].x[j], c = colors[bills["is_genuine"][k]], s = 20)
-            for c in cluster_set:
-                axes[ix][iy].scatter(c.x[i], c.x[j], c = 'red', s = 60, marker='*')
-
-            axes[ix][iy].set_xlabel("$Axis: (" + str(i) + ", " + str(j) + ')$', fontsize = 12)
-            axes[ix][iy].set_xticks([])
-            axes[ix][iy].set_yticks([])
-            n += 1
-    fig.tight_layout()
-    plt.show()
-
-    n = 0
-    for i in range(len(bills)):
-        print(points_set[i].clust, bills["is_genuine"][i])
-        if points_set[i].clust == bills["is_genuine"][i]:
-            n += 1
-    Prec = float(n)/len(bills)
-    print('=====>', Prec)
-    if abs(Prec - Prec0) < 0.001:
-        break
-    Prec0 = Prec
-
-
-
-
-
-
+res = fitClusters_data == pubs['Occupation']
+print('\n', res.sum()/len(res))
