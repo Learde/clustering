@@ -3,7 +3,7 @@ import pandas as pd
 
 CLUST_N = 2
 DIM_N = 6
-POINT_N = 201
+POINT_N = 198
 
 
 class Point:
@@ -91,7 +91,6 @@ while True:
 
     n = 0
     for i in range(len(bills)):
-        print(points_set[i].clust, bills["is_genuine"][i])
         if points_set[i].clust == bills["is_genuine"][i]:
             n += 1
     Prec = float(n)/len(bills)
