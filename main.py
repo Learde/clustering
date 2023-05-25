@@ -1,270 +1,105 @@
-
-import pandas as pd
 import matplotlib.pyplot as plt
-import skfuzzy as fuzz
-from sklearn import preprocessing
-from sklearn.cluster import KMeans
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn import metrics
-from sklearn.model_selection import train_test_split
+import numpy as np
+from sklearn import datasets
+
+POINT_N = 300
+DIM_N = 2
+CLUST_N = 3
+
+data, target, Center = datasets.make_blobs(n_samples=POINT_N, centers=CLUST_N, n_features=DIM_N, center_box=(-10, 10),
+                                           random_state=0, return_centers=True)
+
+slope = (Center[1][1] - Center[0][1]) / (Center[1][0] - Center[0][0])
+C0 = [(Center[0][0] + Center[1][0]) / 2, (Center[0][1] + Center[1][1]) / 2]
+
+print('\nMulticluster')
+
+A = 1.0
 
 
-df = pd.read_csv("heart_cleveland_upload.csv")
+def sigma(x):
+    #return 1.0 / (1.0 + np.exp(-A * x))
+    # Преобразуем вектор в массив, чтобы избежать ошибок типа "integer division or modulo by zero"
+    z = np.array(x)
+    # Вычисляем экспоненты каждого элемента вектора
+    exp_z = np.exp(z)
+    # Вычисляем сумму экспонент всех элементов вектора
+    sum_exp_z = np.sum(exp_z)
+    # Вычисляем вероятности для каждого элемента вектора
+    softmax_z = exp_z / sum_exp_z
+    return softmax_z
 
-print(df.info())
-'''
-#df = pd.read_csv("seeds.csv", sep = ",")
 
-Srv = df['condition'].values
+def delta(x, c):
+    return np.sum(np.linalg.norm(x - c, axis=1))
 
-colors = ['blue', 'lime', 'magenta', 'orange', 'yellow', 'cyan', 'darkviolet']
+"""
+Здесь x - это массив координат точек, а c - массив координат центров кластеров. np.linalg.norm вычисляет евклидово расстояние между точками и центрами кластеров
+"""
 
-for i in range(0, len(df)): #нужно заменить в кволити на 0, 1 и 2
-    plt.scatter(df['Height'][i], df['Diameter'][i], c = colors[Srv[i]], s=20)
+np.random.seed(5)
+
+
+class NNET4:
+    def __init__(self):
+        self.input_nodes = DIM_N
+        self.output_nodes = CLUST_N
+        self.weights_input_to_output = np.random.rand(self.output_nodes, self.input_nodes) # матрица весов (число выходных * число входных)
+        self.output_bias = np.zeros(self.output_nodes, dtype=float) # вектор смещения
+
+    def run(self, features):
+        return sigma(np.dot(self.weights_input_to_output, features) + self.output_bias) # скалярное произведение матрицы весов на вектор признаков (выдает массив с предсказаниями нейронов)
+
+
+network = NNET4()
+
+trg = [[int(target[n] == i) for i in range(CLUST_N)] for n in range(POINT_N)] # в какой кластер пойдет точка
+
+u = np.empty(CLUST_N, dtype=float)
+v = np.empty(CLUST_N, dtype=float)
+p = np.empty(CLUST_N, dtype=float)
+
+H = 0.1  # шаг
+eps = 0.01
+for iter in range(300):
+    sw = np.zeros([CLUST_N, DIM_N], dtype=float)
+    sb = np.zeros(CLUST_N, dtype=float)
+    for n in range(POINT_N):
+        u = np.dot(network.weights_input_to_output, data[n]) + network.output_bias
+        v = trg[n] - sigma(u)
+        p = v * delta(data[n].reshape(1, -1), Center) * sigma(u) * (1.0 - sigma(u))
+        sb += p
+        for k in range(CLUST_N):
+            sw[k] += p[k] * data[n]
+    network.output_bias += H * sb
+    network.weights_input_to_output += H * sw
+    if np.linalg.norm(sw) < eps and np.linalg.norm(sb) < eps:
+        break
+
+print('eps=', eps, '     iter=', iter)
+
+pred = []
+for n in range(POINT_N):
+    res = network.run(data[n])
+    r0 = 0.0
+    i0 = 0
+    for i in range(CLUST_N):
+        if res[i] > r0:
+            i0 = i
+            r0 = res[i]
+    pred.append(i0)
+
+print(1.0 * sum(pred == target) / POINT_N)
+print(network.weights_input_to_output, network.output_bias)
+
+Color = ['blue', 'green', 'cyan', 'black']
+
+# Отобразить точки, разделенные по кластерам
+plt.figure(figsize=(8, 8))
+for i in range(POINT_N):
+    plt.scatter(data[i][0], data[i][1], c=Color[pred[i]], marker='o')
+
+# Отобразить центры кластеров
+plt.scatter(Center[:, 0], Center[:, 1], c='red', marker="*", s=100)
+
 plt.show()
-'''
-
-# min_margin_low = df["ShellWeight"].mean()
-# df["ShellWeight"].fillna(min_margin_low, inplace=True)
-
-km = KMeans(n_clusters=2)
-km_predictions = km.fit_predict(df.drop(["condition"],axis = 1))
-
-df_pred = df.assign(predicted=km_predictions)
-
-#print(df_pred.info())
-
-cluster_of_genuine = round(df_pred[df_pred["condition"] == True]["predicted"].mean())
-predicted = 0
-total = 0
-for iter, t in df_pred.iterrows():
-    total+=1
-    if (t["predicted"] == cluster_of_genuine) == (t["condition"]):
-        predicted+=1
-
-print("Rate of prediction is ", predicted/total)
-
-cntr, u, u0, d, jm, p, fpc = fuzz.cmeans((df.drop(["condition"],axis = 1).transpose()), c=2, m = 2, error=0.05, maxiter=10)
-
-#Учитывая, что u[1] = 1 - u[0], можно хранить только u[0] или u[1]
-df_fcm = df_pred.assign(cl0=u[0], cl1=u[1])
-
-tr = df_fcm["cl0"].mean()
-mean_genuine = df_fcm[df_fcm["condition"] == True]["cl0"].mean()
-cl_genuine = 1
-if (mean_genuine > tr):
-    cl_genuine = 0
-
-
-fpr, tpr, thresholds = metrics.roc_curve(y_true=df_fcm["condition"], y_score=
-                                         (df_fcm["cl0"] if cl_genuine == 0 else df_fcm["cl1"]), 
-                                         )
-
-plt.plot (fpr,tpr)
-#plt.show()
-
-
-
-
-y = df.condition
-X =  df.drop('condition', axis=1)
-x_train, x_test, y_train, y_test = train_test_split(X, y,test_size=0.2, random_state=0)
-
-knn = KNeighborsClassifier(n_neighbors=5)
-
-knn.fit(x_train, y_train)
-
-
-targ_pred = knn.predict_proba(x_test)[:, 1]
-knn.score(x_test,y_test)
-
-fpr, tpr, thr = metrics.roc_curve (y_test, targ_pred)
-
-
-
-plt.plot (fpr,tpr)
-plt.show()
-
-
-
-
-
-
-
-'''
-Srv = df['is_genuine'].values
-
-colors = ['blue', 'lime', 'magenta', 'orange', 'yellow', 'cyan', 'darkviolet']
-
-for i in range(0, len(df)): #нужно заменить в кволити на 0, 1 и 2
-    plt.scatter(df['length'][i], df['diagonal'][i], c = colors[Srv[i]], s=20)
-plt.show()
-
-
-min_margin_low = df["margin_low"].mean()
-df["margin_low"].fillna(min_margin_low, inplace=True)
-
-km = KMeans(n_clusters=2)
-km_predictions = km.fit_predict(df.drop(["is_genuine"],axis = 1))
-
-df_pred = df.assign(predicted=km_predictions)
-
-#print(df_pred.info())
-
-cluster_of_genuine = round(df_pred[df_pred["is_genuine"] == True]["predicted"].mean())
-predicted = 0
-total = 0
-for iter, t in df_pred.iterrows():
-    total+=1
-    if (t["predicted"] == cluster_of_genuine) == (t["is_genuine"]):
-        predicted+=1
-
-print("Rate of prediction is ", predicted/total)
-
-cntr, u, u0, d, jm, p, fpc = fuzz.cmeans((df.drop(["is_genuine"],axis = 1).transpose()), c=2, m = 2, error=0.05, maxiter=10)
-
-#Учитывая, что u[1] = 1 - u[0], можно хранить только u[0] или u[1]
-df_fcm = df_pred.assign(cl0=u[0], cl1=u[1])
-
-tr = df_fcm["cl0"].mean()
-mean_genuine = df_fcm[df_fcm["is_genuine"] == True]["cl0"].mean()
-cl_genuine = 1
-if (mean_genuine > tr):
-    cl_genuine = 0
-#print("-------")
-
-#print(cl_genuine)
-
-#print("-------")
-#print(u)
-#print("-------")
-#print(u0)
-#print("-------")
-#print(d)
-#print("-------")
-#print(df_fcm)
-
-fpr, tpr, thresholds = metrics.roc_curve(y_true=df_fcm["is_genuine"], y_score= 
-                                         (df_fcm["cl0"] if cl_genuine == 0 else df_fcm["cl1"]), 
-                                         )
-plt.plot (fpr,tpr)
-plt.plot (fpr,tpr)
-#plt.show()
-
-
-
-
-y = df.is_genuine
-X =  df.drop('is_genuine', axis=1)
-x_train, x_test, y_train, y_test = train_test_split(X, y,test_size=0.2, random_state=0)
-
-knn = KNeighborsClassifier(n_neighbors=5)
-
-knn.fit(x_train, y_train)
-
-
-targ_pred = knn.predict_proba(x_test)[:, 1]
-scr = knn.score(x_test,y_test)
-
-fpr, tpr, thr = metrics.roc_curve (y_test, targ_pred)
-
-print("Rate of prediction is ", scr)
-
-
-plt.plot (fpr,tpr)
-plt.show()
-#print(fpr)
-#print(tpr)
-#print(thresholds)
-'''
-
-
-
-
-'''
-df = pd.read_csv("seeds.csv", sep = ",")
-
-Srv = df['condition'].values
-
-colors = ['blue', 'lime', 'magenta', 'orange', 'yellow', 'cyan', 'darkviolet']
-
-for i in range(0, len(df)): #нужно заменить в кволити на 0, 1 и 2
-    plt.scatter(df['Kernel.Length'][i], df['Kernel.Width'][i], c = colors[Srv[i]], s=20)
-plt.show()
-
-
-min_margin_low = df["Area"].mean()
-df["Area"].fillna(min_margin_low, inplace=True)
-
-km = KMeans(n_clusters=2)
-km_predictions = km.fit_predict(df.drop(["condition"],axis = 1))
-
-df_pred = df.assign(predicted=km_predictions)
-
-#print(df_pred.info())
-
-cluster_of_genuine = round(df_pred[df_pred["condition"] == True]["predicted"].mean())
-predicted = 0
-total = 0
-for iter, t in df_pred.iterrows():
-    total+=1
-    if (t["predicted"] == cluster_of_genuine) == (t["condition"]):
-        predicted+=1
-
-print("Rate of prediction is ", predicted/total)
-
-cntr, u, u0, d, jm, p, fpc = fuzz.cmeans((df.drop(["condition"],axis = 1).transpose()), c=2, m = 2, error=0.05, maxiter=10)
-
-#Учитывая, что u[1] = 1 - u[0], можно хранить только u[0] или u[1]
-df_fcm = df_pred.assign(cl0=u[0], cl1=u[1])
-
-tr = df_fcm["cl0"].mean()
-mean_genuine = df_fcm[df_fcm["condition"] == True]["cl0"].mean()
-cl_genuine = 1
-if (mean_genuine > tr):
-    cl_genuine = 0
-#print("-------")
-
-#print(cl_genuine)
-
-#print("-------")
-#print(u)
-#print("-------")
-#print(u0)
-#print("-------")
-#print(d)
-#print("-------")
-#print(df_fcm)
-
-fpr, tpr, thresholds = metrics.roc_curve(y_true=df_fcm["condition"], y_score= 
-                                         (df_fcm["cl0"] if cl_genuine == 0 else df_fcm["cl1"]), 
-                                         )
-plt.plot (fpr,tpr)
-#plt.show()
-
-
-
-
-y = df.is_genuine
-X =  df.drop('condition', axis=1)
-x_train, x_test, y_train, y_test = train_test_split(X, y,test_size=0.2, random_state=0)
-
-knn = KNeighborsClassifier(n_neighbors=5)
-
-knn.fit(x_train, y_train)
-
-
-targ_pred = knn.predict_proba(x_test)[:, 1]
-knn.score(x_test,y_test)
-
-fpr, tpr, thr = metrics.roc_curve (y_test, targ_pred)
-
-
-
-plt.plot (fpr,tpr)
-plt.show()
-
-
-
-
-'''
